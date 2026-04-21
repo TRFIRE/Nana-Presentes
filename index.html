@@ -14,6 +14,11 @@
     <!-- Ícones Estáveis (Phosphor Icons) -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
+    <!-- Firebase SDK (Para Banco de Dados em Nuvem) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;900&display=swap');
         body { font-family: 'Montserrat', sans-serif; background-color: #f9fafb; margin: 0; }
@@ -34,6 +39,43 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // ==========================================
+        // CONFIGURAÇÃO DO BANCO DE DADOS (FIREBASE)
+        // ==========================================
+        
+        const isCanvas = typeof __firebase_config !== 'undefined';
+        
+        // SUAS CHAVES DO FIREBASE CONFIGURADAS:
+        const manualFirebaseConfig = {
+            apiKey: "AIzaSyDk_YEExfM3cA6KM-Ae2O9SgQ66XacIqYM",
+            authDomain: "nana-presentes-loja-af75c.firebaseapp.com",
+            projectId: "nana-presentes-loja-af75c",
+            storageBucket: "nana-presentes-loja-af75c.firebasestorage.app",
+            messagingSenderId: "470415105525",
+            appId: "1:470415105525:web:92d0862fcab252ccf594bc"
+        };
+
+        let app, auth, db, appId;
+        let firebaseAtivo = false;
+
+        try {
+            if (isCanvas) {
+                app = firebase.initializeApp(JSON.parse(__firebase_config));
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'nana-store';
+                firebaseAtivo = true;
+            } else if (manualFirebaseConfig.apiKey !== "COLE_SUA_API_KEY_AQUI") {
+                app = firebase.initializeApp(manualFirebaseConfig);
+                appId = manualFirebaseConfig.projectId;
+                firebaseAtivo = true;
+            }
+            if (firebaseAtivo) {
+                auth = firebase.auth();
+                db = firebase.firestore();
+            }
+        } catch (error) {
+            console.error("Erro ao inicializar Firebase:", error);
+        }
+
         const { useState, useEffect } = React;
 
         // Componente de Ícone
@@ -52,7 +94,38 @@
             return <i className={`ph ${getPhClass(name)} ${className}`} style={{ fontSize: size }}></i>;
         };
 
+        // Dados base caso a nuvem esteja vazia
+        const defaultData = {
+            theme: {
+                storeName: "NÃNA Presentes", 
+                logo: "", 
+                announcementBar: "FRETE GRÁTIS PARA COMPRAS ACIMA DE R$ 150,00",
+                primaryColor: "#ec4899",
+                whatsapp: "5511932086207",
+                instagram: "_nanapresentes" 
+            },
+            banners: [
+                { id: 1, url: "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=1600&q=80", title: "Presentes Inesquecíveis" }
+            ],
+            products: [
+                { 
+                    id: 1, 
+                    title: "Caneca Personalizada Porcelana Branca 325ml", 
+                    price: "35.90", 
+                    oldPrice: "45.00", 
+                    category: "Canecas", 
+                    images: ["https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=800&q=80"],
+                    description: "Caneca de porcelana de alta qualidade com acabamento impecável.",
+                    variants: { colors: ["Branco"], sizes: ["325ml"] }
+                }
+            ]
+        };
+
         function App() {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [storeData, setStoreData] = useState(defaultData);
+            
             const [viewMode, setViewMode] = useState('store'); 
             const [selectedProductId, setSelectedProductId] = useState(null);
             const [adminTab, setAdminTab] = useState('theme'); 
@@ -61,50 +134,69 @@
             const [passwordInput, setPasswordInput] = useState('');
             const [loginError, setLoginError] = useState(false);
 
-            // Dados pré-cadastrados salvos na memória local do navegador
-            const [storeData, setStoreData] = useState(() => {
-                const saved = localStorage.getItem('nana_store_data');
-                return saved ? JSON.parse(saved) : {
-                    theme: {
-                        storeName: "NÃNA Presentes", 
-                        logo: "", 
-                        announcementBar: "FRETE GRÁTIS PARA COMPRAS ACIMA DE R$ 150,00",
-                        primaryColor: "#ec4899",
-                        whatsapp: "5511932086207",
-                        instagram: "_nanapresentes" 
-                    },
-                    banners: [
-                        { id: 1, url: "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=1600&q=80", title: "Presentes Inesquecíveis" }
-                    ],
-                    products: [
-                        { 
-                            id: 1, 
-                            title: "Caneca Personalizada Porcelana Branca 325ml", 
-                            price: "35.90", 
-                            oldPrice: "45.00", 
-                            category: "Canecas", 
-                            images: ["https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=800&q=80"],
-                            description: "Caneca de porcelana de alta qualidade com acabamento impecável. Perfeita para o seu café da manhã ou para presentear alguém especial com um toque de exclusividade.",
-                            variants: { colors: ["Branco", "Rosa", "Azul"], sizes: ["325ml"] }
-                        },
-                        { 
-                            id: 2, 
-                            title: "T-shirt Algodão Premium", 
-                            price: "59.90", 
-                            oldPrice: "", 
-                            category: "T-shirts", 
-                            images: ["https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80"],
-                            description: "Camiseta 100% algodão fio 30.1 penteado. Conforto e durabilidade para o dia a dia.",
-                            variants: { colors: ["Preto", "Branco", "Cinza"], sizes: ["P", "M", "G", "GG"] }
-                        }
-                    ]
-                };
-            });
-
-            // Salva as alterações do Admin automaticamente
+            // 1. Autenticar no Banco de Dados
             useEffect(() => {
-                localStorage.setItem('nana_store_data', JSON.stringify(storeData));
-            }, [storeData]);
+                if (!firebaseAtivo) {
+                    setLoading(false);
+                    return;
+                }
+
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await auth.signInWithCustomToken(__initial_auth_token);
+                        } else {
+                            await auth.signInAnonymously();
+                        }
+                    } catch (err) {
+                        console.error("Erro na autenticação:", err);
+                        setLoading(false);
+                    }
+                };
+                
+                initAuth();
+                const unsubscribe = auth.onAuthStateChanged(setUser);
+                return () => unsubscribe();
+            }, []);
+
+            // 2. Buscar Dados em Tempo Real (Sincronização para todos)
+            useEffect(() => {
+                if (!user || !firebaseAtivo) return;
+
+                const storeRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('storeConfig').doc('main');
+                
+                const unsubscribe = storeRef.onSnapshot((docSnap) => {
+                    if (docSnap.exists) {
+                        setStoreData(docSnap.data());
+                    } else {
+                        // Se for a primeira vez, salva os dados padrão na nuvem
+                        storeRef.set(defaultData).catch(e => console.error(e));
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Erro ao buscar dados:", error);
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, [user]);
+
+            // Função para salvar as edições
+            const saveToCloud = async (newData) => {
+                setStoreData(newData); // Atualiza na tela imediatamente
+                if (firebaseAtivo && user) {
+                    try {
+                        const storeRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('storeConfig').doc('main');
+                        await storeRef.set(newData);
+                        alert("Salvo com sucesso na nuvem! Todos os clientes já veem a atualização.");
+                    } catch (err) {
+                        console.error("Erro ao salvar:", err);
+                        alert("Erro de permissão ao salvar na nuvem.");
+                    }
+                } else {
+                    alert("Aviso: Banco de dados não configurado. Alterações não foram salvas na internet.");
+                }
+            };
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -131,12 +223,31 @@
                 window.scrollTo(0,0);
             };
 
+            if (loading) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+                    <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mb-4"></div>
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Carregando NÃNA...</p>
+                </div>
+            );
+
+            if (!firebaseAtivo && !isCanvas) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6 text-center">
+                        <div className="bg-white p-10 rounded-3xl shadow-xl max-w-lg border-2 border-red-100">
+                            <Icon name="Lock" size={48} className="text-red-500 mx-auto mb-4" />
+                            <h2 className="text-2xl font-black text-gray-900 mb-4 uppercase">Banco de Dados Ausente</h2>
+                            <p className="text-gray-600 mb-6">Para usar este site no Netlify, você precisa configurar as chaves do Firebase no código.</p>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen flex flex-col">
                     <div className="bg-gray-900 text-white p-2 flex justify-between items-center px-4 sticky top-0 z-[60]">
                         <div className="flex items-center gap-2">
-                            <Icon name="Store" size={14} className="text-pink-400" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">NÃNA SISTEMAS</span>
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">NÃNA ONLINE</span>
                         </div>
                         <button onClick={() => viewMode === 'admin' ? setViewMode('store') : setViewMode('admin')} className="text-[10px] font-black bg-white/10 px-3 py-1 rounded-lg hover:bg-white/20 uppercase transition-all">
                             {viewMode === 'admin' ? 'Ver Site' : 'Painel Admin'}
@@ -185,7 +296,7 @@
                             ) : (
                                 <AdminPanel 
                                     data={storeData} 
-                                    setData={setStoreData} 
+                                    setData={saveToCloud} 
                                     activeTab={adminTab} 
                                     setActiveTab={setAdminTab} 
                                     onSave={() => setViewMode('store')} 
@@ -328,13 +439,13 @@
             
             const sendOrder = () => {
                 if(!cep || cep.replace(/\D/g, '').length < 8) { setCepError(true); return; }
-                let msg = `🛍️ Olá, gostaria de comprar produtos na NÃNA Presentes.\n\n`;
+                let msg = `Olá, gostaria de comprar produtos na NÃNA Presentes.\n\n`;
                 items.forEach(i => {
                     msg += `• ${i.qty}x ${i.title}\n`;
                     if (i.note) msg += `   Personalização: "${i.note}"\n`;
                     msg += `   Preço: R$ ${parseFloat(i.price).toFixed(2).replace('.', ',')}\n\n`;
                 });
-                msg += `📦 CEP: ${cep}\nSegue meu CEP para cálculo do frete.\n\n*Total dos Produtos: R$ ${subtotal.toFixed(2).replace('.', ',')}*`;
+                msg += `CEP: ${cep}\nSegue meu CEP para cálculo do frete.\n\n*Total dos Produtos: R$ ${subtotal.toFixed(2).replace('.', ',')}*`;
                 window.open(`https://wa.me/${theme.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
             };
 
@@ -388,6 +499,7 @@
 
         function AdminPanel({ data, setData, activeTab, setActiveTab, onSave }) {
             const [showForm, setShowForm] = useState(false);
+            const [editingId, setEditingId] = useState(null);
             const [productForm, setProductForm] = useState({ title: '', price: '', category: 'Canecas', description: '', images: [] });
 
             const handleFileUpload = (e, type, idx = null) => {
@@ -408,12 +520,19 @@
 
             const saveProduct = () => {
                 if(!productForm.title || !productForm.price) return alert("Preencha o nome e preço");
+                
+                const newProducts = editingId 
+                    ? data.products.map(p => p.id === editingId ? { ...productForm, id: editingId } : p)
+                    : [{ ...productForm, id: Date.now() }, ...data.products];
+                
                 setData({
                     ...data, 
-                    products: [ {...productForm, id: Date.now()}, ...data.products ]
+                    products: newProducts
                 });
+                
                 setShowForm(false);
-                setProductForm({ title: '', price: '', description: '', images: [] });
+                setEditingId(null);
+                setProductForm({ title: '', price: '', category: 'Geral', description: '', images: [] });
             };
 
             return (
@@ -486,7 +605,7 @@
                             <div className="space-y-12 animate-in slide-in-from-right-10">
                                 <div className="flex justify-between items-center border-b border-gray-100 pb-8">
                                     <h3 className="text-3xl font-black uppercase tracking-tighter text-gray-800">Catálogo de Produtos</h3>
-                                    {!showForm && <button onClick={() => {setShowForm(true); setProductForm({title: '', price: '', category: 'Geral', description: '', images: []})}} className="bg-pink-500 text-white px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-pink-600 transition-all active:scale-95"><Icon name="Plus" size={14} className="inline mr-2"/> Adicionar Novo</button>}
+                                    {!showForm && <button onClick={() => {setShowForm(true); setEditingId(null); setProductForm({title: '', price: '', category: 'Geral', description: '', images: []})}} className="bg-pink-500 text-white px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-pink-600 transition-all active:scale-95"><Icon name="Plus" size={14} className="inline mr-2"/> Adicionar Novo</button>}
                                 </div>
                                 {showForm && (
                                     <div className="p-12 rounded-[3.5rem] border-4 border-dashed border-pink-100 bg-pink-50/20 mb-16 space-y-10 animate-in zoom-in-95 duration-300">
@@ -524,7 +643,7 @@
                                         </div>
                                         <div className="flex flex-col md:flex-row gap-6 pt-4">
                                             <button onClick={saveProduct} className="flex-1 py-7 bg-green-500 text-white rounded-[2.5rem] font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-all text-sm active:scale-95">Salvar Produto</button>
-                                            <button onClick={() => setShowForm(false)} className="px-14 py-7 bg-white border-2 border-gray-100 rounded-[2.5rem] font-black uppercase text-[10px] tracking-widest text-gray-400 hover:text-red-500 transition-all">Descartar</button>
+                                            <button onClick={() => { setShowForm(false); setEditingId(null); }} className="px-14 py-7 bg-white border-2 border-gray-100 rounded-[2.5rem] font-black uppercase text-[10px] tracking-widest text-gray-400 hover:text-red-500 transition-all">Descartar</button>
                                         </div>
                                     </div>
                                 )}
@@ -538,7 +657,8 @@
                                                 <span className="text-[9px] font-black text-gray-300 uppercase mt-3 inline-block">Ref: {p.id}</span>
                                             </div>
                                             <div className="flex gap-4">
-                                                <button onClick={() => setData({...data, products: data.products.filter(pr => pr.id !== p.id)})} className="p-6 bg-white text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full shadow-lg hover:scale-110 transition-all active:scale-95"><Icon name="Trash2" size={28}/></button>
+                                                <button onClick={() => { setEditingId(p.id); setProductForm(p); setShowForm(true); window.scrollTo(0,0); }} className="p-6 bg-white text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full shadow-lg hover:scale-110 transition-all active:scale-95"><Icon name="Settings" size={28}/></button>
+                                                <button onClick={() => { if(window.confirm('Tem certeza que deseja excluir este produto?')) setData({...data, products: data.products.filter(pr => pr.id !== p.id)}) }} className="p-6 bg-white text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full shadow-lg hover:scale-110 transition-all active:scale-95"><Icon name="Trash2" size={28}/></button>
                                             </div>
                                         </div>
                                     ))}
